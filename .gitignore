@@ -1,0 +1,104 @@
+# ───────────────────────────────────────────────
+# VulnFlow — .gitignore
+# ───────────────────────────────────────────────
+
+## Python ##
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+
+## Virtual Environment ##
+backend/.venv/
+backend/venv/
+
+## Node / Frontend ##
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+.next/
+*.tgz
+.npm/
+
+## IDE & Editors ##
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+## OS Files ##
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
+*.bak
+*.tmp
+
+## Docker ##
+.docker/
+docker-compose.override.yml
+
+## Environment & Secrets ##
+.env
+.env.local
+.env.production
+*.key
+*.pem
+*.cert
+
+## Database & Data ##
+backend/data/
+*.sqlite
+*.db
+scripts/postgresql/data/
+scripts/postgresql/pgsql/
+
+## Redis Binaries (Windows) ##
+scripts/redis/*.exe
+scripts/redis/*.pdb
+scripts/redis/*.docx
+scripts/redis/*.doc
+scripts/redis.zip
+
+## PostgreSQL Windows ##
+scripts/postgresql.zip
+
+## Logs ##
+*.log
+backend/backend.log
+backend/celery/
+nginx_logs/
+
+## Backups ##
+backups/
+offline-package/
+
+## Misc ##
+nul
+.workbuddy/

@@ -1,0 +1,135 @@
+# XSS 检测技能
+id: vulnflow-xss
+name: XSS检测
+version: 1.0.0
+description: 自动化检测 Web 应用的跨站脚本攻击漏洞，支持反射型、存储型和 DOM 型 XSS，覆盖 HTML、属性、JS、CSS、URL 等多种注入上下文
+category: exploit
+type: xss
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - xss
+  - cross-site-scripting
+  - web-security
+  - vulnerability-scanning
+  - owasp-top10
+
+image: vulnflow/xss:1.0.0
+
+inputs:
+  type: object
+  required:
+    - target_url
+  properties:
+    target_url:
+      type: string
+      description: 目标 URL
+      example: "http://example.com/search?q=test"
+    method:
+      type: string
+      enum: ["GET", "POST"]
+      default: "GET"
+      description: HTTP 请求方法
+    parameters:
+      type: array
+      description: 要测试的参数列表
+      items:
+        type: string
+    headers:
+      type: object
+      description: 自定义 HTTP 请求头
+      default: {}
+    cookies:
+      type: object
+      default: {}
+    test_types:
+      type: array
+      description: 要测试的 XSS 类型
+      items:
+        type: string
+        enum: ["reflected", "stored", "dom"]
+      default: ["reflected"]
+    contexts:
+      type: array
+      description: 注入上下文
+      items:
+        type: string
+        enum: ["html", "attribute", "javascript", "css", "url"]
+      default: ["html", "attribute", "javascript"]
+    waf_bypass:
+      type: boolean
+      description: 是否尝试 WAF 绕过
+      default: true
+    delay:
+      type: number
+      default: 0.3
+    timeout:
+      type: number
+      default: 10
+    proxy:
+      type: string
+
+outputs:
+  type: object
+  required:
+    - findings
+    - summary
+  properties:
+    findings:
+      type: array
+      items:
+        type: object
+        required:
+          - type
+          - url
+          - parameter
+          - payload
+          - evidence
+        properties:
+          type:
+            type: string
+            enum: ["reflected", "stored", "dom"]
+          url:
+            type: string
+          parameter:
+            type: string
+          payload:
+            type: string
+          evidence:
+            type: string
+          severity:
+            type: string
+            enum: ["critical", "high", "medium", "low", "info"]
+          context:
+            type: string
+            enum: ["html", "attribute", "javascript", "css", "url"]
+          details:
+            type: object
+    summary:
+      type: object
+      properties:
+        total_findings:
+          type: integer
+        by_type:
+          type: object
+        by_context:
+          type: object
+        by_severity:
+          type: object
+        total_requests:
+          type: integer
+        duration_seconds:
+          type: number
+
+timeout_seconds: 120
+
+resource_limits:
+  memory: "512m"
+  cpu_quota: 50000
+
+metadata:
+  owasp: "A03:2021 - Injection"
+  cvss_base: 6.1
+  requires_network: true
+  skill_type: active_scan

@@ -1,0 +1,104 @@
+# WAF 检测技能
+id: vulnflow-wafdetect
+name: WAF检测
+version: 1.0.0
+description: 检测 Web 应用防火墙和入侵防御系统的存在，识别 WAF 类型并提供绕过建议
+category: recon
+type: waf_detect
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - waf
+  - firewall
+  - ips
+  - bypass
+  - recon
+
+image: vulnflow/wafdetect:1.0.0
+
+inputs:
+  type: object
+  required:
+    - target_url
+  properties:
+    target_url:
+      type: string
+      description: 目标 URL
+      example: "http://example.com"
+    test_payloads:
+      type: array
+      description: 自定义测试 payload
+      items:
+        type: string
+      default: []
+    timeout:
+      type: number
+      default: 10
+    headers:
+      type: object
+      default: {}
+    proxy:
+      type: string
+
+outputs:
+  type: object
+  required:
+    - waf_detected
+    - details
+    - summary
+  properties:
+    waf_detected:
+      type: boolean
+    waf_type:
+      type: string
+    waf_name:
+      type: string
+    confidence:
+      type: string
+      enum: ["high", "medium", "low"]
+    details:
+      type: object
+      properties:
+        detection_method:
+          type: string
+        matched_signatures:
+          type: array
+          items:
+            type: string
+        response_headers:
+          type: object
+        block_page_analysis:
+          type: string
+    bypass_suggestions:
+      type: array
+      items:
+        type: object
+        properties:
+          technique:
+            type: string
+          description:
+            type: string
+          difficulty:
+            type: string
+            enum: ["easy", "medium", "hard"]
+    summary:
+      type: object
+      properties:
+        tests_performed:
+          type: integer
+        waf_detected:
+          type: boolean
+        duration_seconds:
+          type: number
+
+timeout_seconds: 60
+
+resource_limits:
+  memory: "256m"
+  cpu_quota: 50000
+
+metadata:
+  requires_network: true
+  skill_type: passive_scan
+  network_access: true

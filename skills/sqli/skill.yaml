@@ -1,0 +1,140 @@
+# SQL 注入检测技能
+id: vulnflow-sqli
+name: SQL注入检测
+version: 1.0.0
+description: 自动化检测 Web 应用的 SQL 注入漏洞，支持错误注入、布尔盲注、时间盲注和 UNION 注入四种检测方式
+category: exploit
+type: sqli
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - sql-injection
+  - web-security
+  - vulnerability-scanning
+  - owasp-top10
+
+image: vulnflow/sqli:1.0.0
+
+inputs:
+  type: object
+  required:
+    - target_url
+  properties:
+    target_url:
+      type: string
+      description: 目标 URL，包含可能的注入参数
+      example: "http://example.com/page?id=1"
+    method:
+      type: string
+      enum: ["GET", "POST"]
+      default: "GET"
+      description: HTTP 请求方法
+    parameters:
+      type: array
+      description: 要测试的参数列表，如果为空则自动从 URL 中提取
+      items:
+        type: string
+    headers:
+      type: object
+      description: 自定义 HTTP 请求头
+      default: {}
+    cookies:
+      type: object
+      description: Cookie 信息
+      default: {}
+    test_types:
+      type: array
+      description: 要执行的测试类型
+      items:
+        type: string
+        enum: ["error", "boolean", "time", "union"]
+      default: ["error", "boolean", "time", "union"]
+    delay:
+      type: number
+      description: 请求之间的延迟（秒），用于绕过 WAF/IPS
+      default: 0.5
+      minimum: 0
+      maximum: 5
+    timeout:
+      type: number
+      description: 每个请求的超时时间（秒）
+      default: 10
+      minimum: 1
+      maximum: 30
+    proxy:
+      type: string
+      description: 代理地址，如 http://127.0.0.1:8080
+    max_requests:
+      type: integer
+      description: 最大测试请求数
+      default: 100
+
+outputs:
+  type: object
+  required:
+    - findings
+    - summary
+  properties:
+    findings:
+      type: array
+      description: 检测到的漏洞列表
+      items:
+        type: object
+        required:
+          - vulnerability_type
+          - vulnerable_url
+          - parameter
+          - payload
+          - evidence
+          - severity
+        properties:
+          vulnerability_type:
+            type: string
+            enum: ["error_based", "boolean_based", "time_based", "union_based"]
+          vulnerable_url:
+            type: string
+          parameter:
+            type: string
+          payload:
+            type: string
+          evidence:
+            type: string
+          severity:
+            type: string
+            enum: ["critical", "high", "medium", "low", "info"]
+          details:
+            type: object
+    summary:
+      type: object
+      properties:
+        total_findings:
+          type: integer
+        critical_count:
+          type: integer
+        high_count:
+          type: integer
+        medium_count:
+          type: integer
+        low_count:
+          type: integer
+        test_types_executed:
+          type: array
+          items:
+            type: string
+        total_requests:
+          type: integer
+        duration_seconds:
+          type: number
+
+timeout_seconds: 120
+
+resource_limits:
+  memory: "512m"
+  cpu_quota: 50000
+
+metadata:
+  owasp: "A03:2021 - Injection"
+  cvss_base: 9.8
+  requires_network: true
+  skill_type: active_scan

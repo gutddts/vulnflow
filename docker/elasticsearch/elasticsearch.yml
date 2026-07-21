@@ -1,0 +1,40 @@
+# ============================================================
+# VulnFlow - Elasticsearch 配置
+# ============================================================
+
+cluster.name: vulnflow-es-cluster
+node.name: vulnflow-es01
+
+# 数据与日志路径
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# 网络
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# 单节点模式
+discovery.type: single-node
+
+# 安全 - 开发环境禁用
+xpack.security.enabled: false
+xpack.security.enrollment.enabled: false
+xpack.security.http.ssl.enabled: false
+xpack.security.transport.ssl.enabled: false
+
+# 索引性能
+indices.memory.index_buffer_size: 20%
+indices.queries.cache.size: 10%
+indices.fielddata.cache.size: 15%
+
+# 线程池
+thread_pool.write.queue_size: 1000
+thread_pool.search.queue_size: 1000
+
+# HTTP 压缩
+http.compression: true
+http.compression_level: 3
+
+# 日志
+logger.level: INFO

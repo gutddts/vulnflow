@@ -1,0 +1,104 @@
+# 子域名枚举技能
+id: vulnflow-subdomain
+name: 子域名枚举
+version: 1.0.0
+description: 通过 DNS 爆破和证书透明度日志发现目标域名的所有子域名
+category: recon
+type: subdomain_enum
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - subdomain
+  - dns
+  - certificate-transparency
+  - recon
+  - asset-discovery
+
+image: vulnflow/subdomain:1.0.0
+
+inputs:
+  type: object
+  required:
+    - domain
+  properties:
+    domain:
+      type: string
+      description: 目标域名
+      example: "example.com"
+    wordlist:
+      type: array
+      description: 自定义子域名词表，为空则使用内置词表
+      items:
+        type: string
+    use_crtsh:
+      type: boolean
+      description: 是否查询 crt.sh 证书透明度日志
+      default: true
+    resolve_ips:
+      type: boolean
+      description: 是否解析 IP 地址
+      default: true
+    dns_servers:
+      type: array
+      description: 自定义 DNS 服务器
+      items:
+        type: string
+      default: ["8.8.8.8", "1.1.1.1"]
+    threads:
+      type: integer
+      description: 并发线程数
+      default: 50
+      minimum: 1
+      maximum: 200
+    timeout:
+      type: number
+      description: DNS 查询超时时间（秒）
+      default: 3
+
+outputs:
+  type: object
+  required:
+    - subdomains
+    - summary
+  properties:
+    subdomains:
+      type: array
+      items:
+        type: object
+        required:
+          - subdomain
+        properties:
+          subdomain:
+            type: string
+          ip_addresses:
+            type: array
+            items:
+              type: string
+          source:
+            type: string
+            enum: ["dns_bruteforce", "certificate_transparency"]
+          cname:
+            type: string
+    summary:
+      type: object
+      properties:
+        total_discovered:
+          type: integer
+        resolved_count:
+          type: integer
+        by_source:
+          type: object
+        duration_seconds:
+          type: number
+
+timeout_seconds: 300
+
+resource_limits:
+  memory: "256m"
+  cpu_quota: 50000
+
+metadata:
+  requires_network: true
+  skill_type: passive_scan
+  network_access: true

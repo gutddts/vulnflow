@@ -1,0 +1,31 @@
+# 依赖目录（容器内通过 npm ci 重新安装）
+node_modules/
+
+# 构建产物
+dist/
+build/
+dist-ssr/
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 版本控制
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 系统
+.DS_Store
+Thumbs.db

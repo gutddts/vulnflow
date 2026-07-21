@@ -1,0 +1,118 @@
+# 目录爆破技能
+id: vulnflow-dirbrute
+name: 目录爆破
+version: 1.0.0
+description: HTTP 目录和文件发现，通过内置词表枚举 Web 服务器上的隐藏路径和文件
+category: recon
+type: dir_bruteforce
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - directory-bruteforce
+  - web-discovery
+  - content-discovery
+  - recon
+
+image: vulnflow/dirbrute:1.0.0
+
+inputs:
+  type: object
+  required:
+    - target_url
+  properties:
+    target_url:
+      type: string
+      description: 目标 URL
+      example: "http://example.com"
+    wordlist:
+      type: array
+      description: 自定义词表，为空则使用内置词表
+      items:
+        type: string
+    extensions:
+      type: array
+      description: 文件扩展名列表
+      items:
+        type: string
+      default: ["php", "html", "js", "json", "xml", "txt", "bak", "zip", "sql", "git"]
+    status_whitelist:
+      type: array
+      description: 关注的状态码
+      items:
+        type: integer
+      default: [200, 201, 202, 203, 301, 302, 307, 401, 403, 405, 500]
+    threads:
+      type: integer
+      description: 并发线程数
+      default: 20
+      minimum: 1
+      maximum: 100
+    timeout:
+      type: number
+      default: 5
+    headers:
+      type: object
+      default: {}
+    cookies:
+      type: object
+      default: {}
+    proxy:
+      type: string
+    follow_redirects:
+      type: boolean
+      default: false
+    analyze_404:
+      type: boolean
+      description: 分析自定义 404 页面
+      default: true
+
+outputs:
+  type: object
+  required:
+    - discovered_paths
+    - summary
+  properties:
+    discovered_paths:
+      type: array
+      items:
+        type: object
+        required:
+          - path
+          - status_code
+          - size
+        properties:
+          path:
+            type: string
+          status_code:
+            type: integer
+          size:
+            type: integer
+          redirect:
+            type: string
+          content_type:
+            type: string
+          title:
+            type: string
+    summary:
+      type: object
+      properties:
+        total_paths_tested:
+          type: integer
+        total_discovered:
+          type: integer
+        by_status:
+          type: object
+        duration_seconds:
+          type: number
+
+timeout_seconds: 300
+
+resource_limits:
+  memory: "256m"
+  cpu_quota: 100000
+
+metadata:
+  requires_network: true
+  skill_type: passive_scan
+  network_access: true

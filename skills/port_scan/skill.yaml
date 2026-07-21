@@ -1,0 +1,121 @@
+# 端口扫描技能
+id: vulnflow-portscan
+name: 端口扫描
+version: 1.0.0
+description: TCP 端口扫描，检测目标主机的开放端口、服务版本和操作系统指纹信息
+category: recon
+type: port_scan
+
+author: VulnFlow Team
+license: MIT
+tags:
+  - port-scan
+  - service-detection
+  - os-fingerprint
+  - recon
+
+image: vulnflow/portscan:1.0.0
+
+inputs:
+  type: object
+  required:
+    - target
+  properties:
+    target:
+      type: string
+      description: 目标 IP 地址或主机名
+      example: "192.168.1.1"
+    ports:
+      type: array
+      description: 要扫描的端口列表，为空则使用常用端口
+      items:
+        type: integer
+        minimum: 1
+        maximum: 65535
+    port_range:
+      type: string
+      description: 端口范围，如 "1-1000"
+      example: "1-1000"
+    timeout:
+      type: number
+      description: 每个端口的超时时间（秒）
+      default: 2
+    max_concurrency:
+      type: integer
+      description: 最大并发连接数
+      default: 100
+    banner_grab:
+      type: boolean
+      description: 是否获取服务 Banner
+      default: true
+    os_detection:
+      type: boolean
+      description: 是否进行操作系统检测
+      default: false
+    service_probes:
+      type: boolean
+      description: 是否发送服务探测包
+      default: true
+
+outputs:
+  type: object
+  required:
+    - open_ports
+    - summary
+  properties:
+    open_ports:
+      type: array
+      items:
+        type: object
+        required:
+          - port
+          - protocol
+          - service
+        properties:
+          port:
+            type: integer
+          protocol:
+            type: string
+            enum: ["tcp", "udp"]
+          state:
+            type: string
+            enum: ["open", "filtered", "closed"]
+          service:
+            type: string
+          version:
+            type: string
+          banner:
+            type: string
+          product:
+            type: string
+    os_info:
+      type: object
+      properties:
+        detected:
+          type: boolean
+        name:
+          type: string
+        accuracy:
+          type: integer
+    summary:
+      type: object
+      properties:
+        total_scanned:
+          type: integer
+        total_open:
+          type: integer
+        total_filtered:
+          type: integer
+        duration_seconds:
+          type: number
+
+timeout_seconds: 300
+
+resource_limits:
+  memory: "256m"
+  cpu_quota: 100000
+
+metadata:
+  requires_network: true
+  skill_type: passive_scan
+  network_access: true
