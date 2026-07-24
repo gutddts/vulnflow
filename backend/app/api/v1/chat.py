@@ -7,6 +7,7 @@ import uuid
 from typing import Annotated, AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -28,6 +29,17 @@ from app.schemas.chat import (
 
 settings = get_settings()
 router = APIRouter()
+
+
+class StreamChatRequest(BaseModel):
+    """流式聊天请求，附带 AI 连接配置"""
+    content: str = Field(..., min_length=1)
+    role: str = Field(default="user", pattern=r"^(user|assistant|system)$")
+    model: str = Field(default="gpt-4o")
+    provider: str = Field(default="openai")
+    api_key: str = Field(default="")
+    api_base_url: str = Field(default="https://api.openai.com/v1")
+    api_format: str = Field(default="openai")
 
 
 # ------------------------------------------------------------------ #
@@ -212,7 +224,7 @@ async def create_message(
 @router.post("/sessions/{session_id}/stream")
 async def stream_chat(
     session_id: uuid.UUID,
-    body: ChatMessageCreate,
+    body: StreamChatRequest,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -248,40 +260,128 @@ async def stream_chat(
     )
     history = list(history_result.scalars().all())
 
+    # Build system prompt for penetration testing
+    system_prompt = """You are VulnFlow AI, a professional penetration testing assistant.
+
+Capabilities:
+- Penetration testing planning and execution
+- Vulnerability analysis (SQL injection, XSS, SSRF, RCE, etc.)
+- Security tool guidance (Nmap, sqlmap, Burp Suite, etc.)
+- Security report generation
+- Code audit and remediation advice
+
+Response style: Professional, concise, practical. Give actionable advice directly."""
+
     async def event_generator() -> AsyncGenerator[dict, None]:
         assistant_content = ""
         try:
-            # Simulate streaming LLM response
-            # In production, integrate with LangChain/LangGraph here
-            chunks = _simulate_streaming_response(body.content, history)
+            # Build messages with history
+            msgs: list[dict] = [{"role": "system", "content": system_prompt}]
+            for h in history:
+                msgs.append({"role": h.role, "content": h.content})
 
-            for chunk in chunks:
-                assistant_content += chunk
-                if await request.is_disconnected():
-                    break
-                yield {"event": "message", "data": json.dumps({"type": "text", "content": chunk})}
+            # Determine API endpoint and auth header
+            base_url = body.api_base_url.rstrip("/")
+            model = body.model
+            api_key = body.api_key
 
-            # Save assistant message
-            async with async_session_factory() as save_db:
-                assistant_msg = ChatMessage(
-                    session_id=session_id,
-                    role="assistant",
-                    content=assistant_content,
-                    tokens_used=len(assistant_content.split()),
-                )
-                save_db.add(assistant_msg)
-                await save_db.commit()
+            if not api_key:
+                # No API key configured - use simulation with a clear indicator
+                yield {"event": "message", "data": json.dumps({"type": "text", "content": "\n\n⚠️ **未配置 API 密钥**\n\n请在设置中配置 AI 模型的 API 密钥以获取真实 AI 回复。"})}
+                yield {"event": "message", "data": json.dumps({"type": "done", "content": ""})}
+                return
 
-            yield {
-                "event": "message",
-                "data": json.dumps({"type": "done", "content": ""}),
-            }
+            if body.api_format == "anthropic":
+                # Anthropic format
+                api_url = f"{base_url}/messages"
+                api_headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                }
+                system_msg = system_prompt
+                chat_msgs = [m for m in msgs if m["role"] != "system"]
+                api_body = {
+                    "model": model,
+                    "stream": True,
+                    "max_tokens": 4096,
+                    "system": system_msg,
+                    "messages": chat_msgs,
+                }
+            else:
+                # OpenAI format (also covers DeepSeek, Ollama, etc.)
+                api_url = f"{base_url}/chat/completions"
+                api_headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                }
+                api_body = {
+                    "model": model,
+                    "stream": True,
+                    "max_tokens": 4096,
+                    "messages": msgs,
+                }
+
+            import httpx
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream("POST", api_url, headers=api_headers, json=api_body) as resp:
+                    if resp.status_code != 200:
+                        error_text = await resp.aread()
+                        raise Exception(f"API error {resp.status_code}: {error_text[:200]}")
+
+                    buf = ""
+                    async for chunk in resp.aiter_bytes():
+                        if await request.is_disconnected():
+                            break
+                        buf += chunk.decode("utf-8", errors="replace")
+                        lines = buf.split("\n")
+                        buf = lines.pop() if lines else ""
+
+                        for line in lines:
+                            line = line.strip()
+                            if not line or not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if data == "[DONE]":
+                                break
+
+                            if body.api_format == "anthropic":
+                                try:
+                                    obj = json.loads(data)
+                                    if obj.get("type") == "content_block_delta":
+                                        delta = obj.get("delta", {}).get("text", "")
+                                        if delta:
+                                            assistant_content += delta
+                                            yield {"event": "message", "data": json.dumps({"type": "text", "content": delta})}
+                                except json.JSONDecodeError:
+                                    pass
+                            else:
+                                # OpenAI SSE format
+                                try:
+                                    obj = json.loads(data)
+                                    delta = obj.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                    if delta:
+                                        assistant_content += delta
+                                        yield {"event": "message", "data": json.dumps({"type": "text", "content": delta})}
+                                except json.JSONDecodeError:
+                                    pass
+
+            # Save assistant message to database
+            if assistant_content:
+                async with async_session_factory() as save_db:
+                    assistant_msg = ChatMessage(
+                        session_id=session_id,
+                        role="assistant",
+                        content=assistant_content,
+                        tokens_used=len(assistant_content.split()),
+                    )
+                    save_db.add(assistant_msg)
+                    await save_db.commit()
+
+            yield {"event": "message", "data": json.dumps({"type": "done", "content": ""})}
 
         except Exception as exc:
-            yield {
-                "event": "message",
-                "data": json.dumps({"type": "error", "content": str(exc)}),
-            }
+            yield {"event": "message", "data": json.dumps({"type": "error", "content": str(exc)})}
 
     from app.core.database import async_session_factory
 

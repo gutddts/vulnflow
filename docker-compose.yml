@@ -42,6 +42,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    user: root
     container_name: vulnflow-backend
     expose:
       - "8000"
@@ -58,6 +59,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_data:/app/data
+      - ./frontend/public/skills:/frontend/public/skills:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - vulnflow_net
@@ -306,7 +308,7 @@ services:
       - vulnflow_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'green\|yellow'"]
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE 'green|yellow'"]
       interval: 30s
       timeout: 10s
       retries: 5

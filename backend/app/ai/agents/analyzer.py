@@ -147,6 +147,7 @@ class AnalyzerAgent(BaseAgent):
                     new_clues.extend(llm_clues)
                 except Exception as exc:
                     self._log(f"LLM analysis failed for {skill_id}: {exc}", "warning")
+                    state["status_messages"] = state.get("status_messages", []) + self._add_status(state, f"[回退] AI 深度分析({skill_id})失败，仅使用模式匹配结果")
 
         # Deduplicate findings
         deduped_findings = self._deduplicate_findings(existing_findings + new_findings)

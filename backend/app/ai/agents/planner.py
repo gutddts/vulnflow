@@ -104,6 +104,8 @@ class PlannerAgent(BaseAgent):
             plan = self._parse_plan_response(response.content)
         except Exception as exc:
             self._log(f"LLM call failed, using default plan: {exc}", "warning")
+            status_messages = self._add_status(state, f"[回退] AI 模型调用失败({exc})，使用默认渗透测试计划")
+            state["status_messages"] = state.get("status_messages", []) + status_messages
             plan = self._default_plan()
 
         # Select initial skills from plan
@@ -208,6 +210,7 @@ class PlannerAgent(BaseAgent):
             return json.loads(content)
         except (json.JSONDecodeError, IndexError):
             self._log("Failed to parse plan JSON, using default", "warning")
+            state["status_messages"] = state.get("status_messages", []) + self._add_status(state, "[回退] AI 返回格式无法解析，使用默认计划")
             return self._default_plan()
 
     def _default_plan(self) -> dict:

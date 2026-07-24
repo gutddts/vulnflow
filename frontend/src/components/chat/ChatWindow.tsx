@@ -6,7 +6,8 @@ import { useChatStore } from '@/stores/chatStore'
 import { useFindingStore } from '@/stores/findingStore'
 import { usePenTestStore } from '@/stores/penetrationStore'
 import { useSkillStore } from '@/stores/skillStore'
-import { useLLM } from '@/hooks/useLLM'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useLLM, getLastReasoning } from '@/hooks/useLLM'
 import { useWorkflowRunner } from '@/hooks/useWorkflowRunner'
 import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from '@/stores/workflowSeed'
 import { AGENT_SYSTEM_PROMPT } from '@/lib/penetrationAgent'
@@ -99,6 +100,8 @@ export function ChatWindow() {
   const messages: ChatMessage[] = currentSessionId ? (sessionMessages[currentSessionId] || []) : []
   const currentSession = sessions.find((s) => s.id === currentSessionId)
   const { sendToLLM, isConfigured, config } = useLLM()
+  // 实际配置的 AI 模型（从用户设置中）
+  const configuredModel = useSettingsStore((s) => s.model)
   const { startWorkflowRun, stopWorkflowRun, isRunning } = useWorkflowRunner()
 
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowTemplate | null>(null)
@@ -123,6 +126,7 @@ export function ChatWindow() {
 
   const handleSend = useCallback(async (content: string) => {
     if (!currentSessionId) return
+    console.log('[ChatWindow] handleSend called with:', content.slice(0, 50), 'isConfigured:', isConfigured, 'penTest:', penTestMode)
 
     // 1. 添加用户消息
     const userMsg: ChatMessage = {
@@ -190,14 +194,28 @@ export function ChatWindow() {
 
     // 3. 否则走常规 AI 对话
     const loadingId = generateId()
+    const state = useChatStore.getState()
+    const currentMessages = state.sessionMessages[currentSessionId] || []
+    const chatHistory = currentMessages.filter((m) => m.id !== loadingId && m.role !== 'system').map((m) => ({ role: m.role, content: m.content }))
+    const historyCount = chatHistory.length
+
     const thinkingText = penTestMode
-      ? `🔍 AI 红队智能体正在思考...\n\n正在分析：\n- 目标：${(usePenTestStore.getState().state?.target) || '提取中'}\n- 阶段：${(usePenTestStore.getState().state?.phases.length || 0) === 0 ? '尚未开始' : '阶段 ' + (usePenTestStore.getState().state?.phases.length || 0)}\n- 可用技能：${(useSkillStore.getState().skills.length)} 个\n\n正在调用 AI 模型（${config.model}）生成渗透测试结果...`
+      ? `🔍 AI 红队智能体正在思考...\n\n正在分析：\n- 目标：${(usePenTestStore.getState().state?.target) || '提取中'}\n- 阶段：${(usePenTestStore.getState().state?.phases.length || 0) === 0 ? '尚未开始' : '阶段 ' + (usePenTestStore.getState().state?.phases.length || 0)}\n- 可用技能：${useSkillStore.getState().skills.length} 个\n\n正在调用 AI 模型（${config.model}）生成渗透测试结果...`
       : isConfigured
-        ? `💭 AI 正在思考...\n\n已加载历史消息：${chatHistory.length} 条\n模型：${config.model}\n\n等待 AI 回复...`
+        ? `💭 AI 正在思考...
+
+目标：${content.slice(0, 80)}${content.length > 80 ? '...' : ''}
+模型：${config.model}
+历史消息：${historyCount} 条
+可用技能：${useSkillStore.getState().skills.length} 个
+
+⏳ 等待 AI 流式响应...`
         : '⚠️ 请先在「设置 → AI 模型配置」中配置 API 密钥。'
+    // 不再使用假脚本式 thinkingLines，等待动画直接用 thinkingText
+    const displayText = thinkingText
     const loadingMsg: ChatMessage = {
       id: loadingId, session_id: currentSessionId, role: 'assistant', type: 'text',
-      content: thinkingText,
+      content: displayText,
       created_at: new Date().toISOString(),
     }
     addMessage(loadingMsg)
@@ -208,10 +226,6 @@ export function ChatWindow() {
         s.id === currentSessionId ? { ...s, updated_at: new Date().toISOString(), message_count: s.message_count + 1 } : s,
       ),
     }))
-
-    const state = useChatStore.getState()
-    const currentMessages = state.sessionMessages[currentSessionId] || []
-    const chatHistory = currentMessages.filter((m) => m.id !== loadingId && m.role !== 'system').map((m) => ({ role: m.role, content: m.content }))
 
     // AI 对话消息构建
     let enhancedContent = content
@@ -234,9 +248,13 @@ export function ChatWindow() {
     }
 
     try {
+      // 先用已有可靠的非流式 API 获取完整回复
+      console.log('[ChatWindow] calling sendToLLM...')
       const reply = await sendToLLM(enhancedContent, chatHistory)
+      console.log('[ChatWindow] sendToLLM returned, length:', reply.length)
+      if (!reply) throw new Error('AI 返回了空回复')
 
-      // 清理 AI 回复中的 [xxx] 指令块（更健壮的正则，避免误删正文）
+      // 清理 AI 回复中的 [xxx] 指令块
       const cleanReply = reply
         .replace(/\[记录漏洞\][\s\S]*?(?=\[|$)/g, '')
         .replace(/\[记录信息\][\s\S]*?(?=\[|$)/g, '')
@@ -247,15 +265,23 @@ export function ChatWindow() {
 
       // 渗透测试模式：执行动作 + 追加卡片 —— 单次 setState 批量写入
       const actionCards = penTestMode ? executeAIActions(reply, currentSessionId) : []
-      // AI 回复的最终显示内容（如果清空了就显示 AI 已执行操作的提示）
       const finalContent = cleanReply || `✅ AI 已根据渗透测试结果执行了 ${actionCards.length} 个操作。\n\n请查看下方可视化卡片了解详情。`
       if (penTestMode) {
         console.log('[PenTest] AI reply length:', reply.length, 'actions:', actionCards.length, 'cleaned:', !!cleanReply)
       }
 
       useChatStore.setState((st) => {
+        const reasoningText = getLastReasoning()
         const msgs = (st.sessionMessages[currentSessionId] || []).map((m) =>
-          m.id === loadingId ? { ...m, content: finalContent, metadata: { ...m.metadata, model: config.model } } : m,
+          m.id === loadingId ? {
+            ...m,
+            content: finalContent,
+            metadata: {
+              ...m.metadata,
+              model: config.model,
+              ...(reasoningText ? { reasoning: reasoningText } : {}),
+            },
+          } : m,
         )
         return {
           sessionMessages: { ...st.sessionMessages, [currentSessionId]: [...msgs, ...actionCards] },
@@ -269,7 +295,7 @@ export function ChatWindow() {
         sessionMessages: {
           ...st.sessionMessages,
           [currentSessionId]: (st.sessionMessages[currentSessionId] || []).map((m) =>
-            m.id === loadingId ? { ...m, content: `❌ AI 请求失败：${errMsg}` } : m,
+            m.id === loadingId ? { ...m, content: `${m.content}\n\n❌ AI 请求失败：${errMsg}\n\n请检查：\n1. 设置 → AI 模型配置 中 API Key 是否正确\n2. 网络是否能访问 AI API\n3. 模型名称是否正确` } : m,
           ),
         },
       }))
@@ -308,8 +334,23 @@ export function ChatWindow() {
             <Shield className="h-3 w-3" />
             {penTestMode ? '渗透测试 ON' : '渗透测试 OFF'}
           </button>
+          <button
+            onClick={async () => {
+              toast.info('测试中...')
+              try {
+                const r = await sendToLLM('回复"测试成功"三个字', [])
+                toast.success('AI 响应：' + r.slice(0, 80))
+              } catch (e: any) {
+                toast.error('测试失败：' + (e?.message || e))
+              }
+            }}
+            className="flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-400 hover:bg-cyan-500/20"
+            title="测试 AI 连接是否正常"
+          >
+            🧪 测试
+          </button>
           <Sparkles className="h-3 w-3 text-cyber-cyan" />
-          <span className="text-[10px] text-[#64748b]">{currentSession?.model || 'gpt-4o'}</span>
+          <span className="text-[10px] text-[#64748b]">{configuredModel}</span>
         </div>
       </div>
 

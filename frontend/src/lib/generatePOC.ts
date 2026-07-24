@@ -42,4 +42,3 @@ ${finding.cve_id ? `- CVE: ${finding.cve_id}` : ''}
   const raw = await requestAI(prompt, systemPrompt)
   store.updateFinding(findingId, { evidence: raw })
 }
-</content>

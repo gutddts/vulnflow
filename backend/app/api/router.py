@@ -6,14 +6,18 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     agents,
+    ai_executor,
+    ai_proxy,
     auth,
     chat,
     dashboard,
     licenses,
+    pdf_export,
     projects,
     reports,
     skills,
     tasks,
+    verify,
     websocket,
     workflows,
 )
@@ -27,7 +31,11 @@ api_router.include_router(workflows.router, prefix="/v1/workflows", tags=["Workf
 api_router.include_router(tasks.router, prefix="/v1/tasks", tags=["Tasks"])
 api_router.include_router(chat.router, prefix="/v1/chat", tags=["Chat"])
 api_router.include_router(reports.router, prefix="/v1/reports", tags=["Reports"])
+api_router.include_router(pdf_export.router, prefix="/v1", tags=["PDFExport"])
 api_router.include_router(dashboard.router, prefix="/v1/dashboard", tags=["Dashboard"])
 api_router.include_router(agents.router, prefix="/v1/agents", tags=["Agents"])
 api_router.include_router(licenses.router, prefix="/v1/licenses", tags=["Licenses"])
+api_router.include_router(ai_proxy.router, prefix="/v1", tags=["AI"])
+api_router.include_router(ai_executor.router, prefix="/v1/ai", tags=["AI"])
+api_router.include_router(verify.router, prefix="/v1", tags=["Verify"])
 api_router.include_router(websocket.router, prefix="/v1/ws", tags=["WebSocket"])

@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useChatStore } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useFindingStore, useSeverityStats } from '@/stores/findingStore'
 import { cn, formatRelativeTime } from '@/lib/utils'
@@ -50,11 +51,17 @@ export function ContextPanel() {
   const currentSessionId = useChatStore((s) => s.currentSessionId)
   const sessions = useChatStore((s) => s.sessions)
   const sessionMessages = useChatStore((s) => s.sessionMessages)
+  // 实际配置的 AI 模型
+  const configuredModel = useSettingsStore((s) => s.model)
 
   const currentSession = sessions.find((s) => s.id === currentSessionId)
   const messages = currentSessionId ? sessionMessages[currentSessionId] || [] : []
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant')
+  // 用最近一条消息的时间作为"最后活动"——addMessage 时可能没更新 session.updated_at
+  const lastActivityTime = messages.length > 0
+    ? messages[messages.length - 1].created_at
+    : currentSession?.updated_at
 
   // 关联任务和漏洞（从其他 store）
   const tasks = useTaskStore((s) => s.tasks)
@@ -105,6 +112,22 @@ export function ContextPanel() {
 
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-3">
+          {/* 实时状态 */}
+          {(() => {
+            const lastMsg = messages[messages.length - 1]
+            const isRunning = lastMsg && (lastMsg.content.includes('⏳ 执行中') || lastMsg.content.includes('正在思考') || lastMsg.content.includes('执行中...'))
+            const isWorkflow = lastMsg && (lastMsg.content.includes('🚀 **启动工作流') || lastMsg.content.includes('▶️ 执行') || lastMsg.content.includes('⚡ 并行执行'))
+            return (isRunning || isWorkflow) ? (
+              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+                <span className="text-xs font-semibold text-yellow-300">
+                  {isWorkflow ? '工作流执行中' : 'AI 响应中'}
+                </span>
+                <span className="text-[10px] text-yellow-400/70 ml-auto">实时同步</span>
+              </div>
+            ) : null
+          })()}
+
           {/* 当前会话信息 - 始终跟随 currentSession */}
           <div className="rounded-lg border border-cyber-cyan/20 bg-cyber-cyan/5 p-3">
             <div className="flex items-center gap-2 mb-2">
@@ -118,7 +141,7 @@ export function ContextPanel() {
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748b]">模型</span>
-                <span className="text-white font-mono">{currentSession?.model || 'gpt-4o'}</span>
+                <span className="text-white font-mono">{configuredModel}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748b]">消息数</span>
@@ -127,7 +150,7 @@ export function ContextPanel() {
               <div className="flex justify-between">
                 <span className="text-[#64748b]">最后活动</span>
                 <span className="text-white">
-                  {currentSession ? formatRelativeTime(currentSession.updated_at) : '-'}
+                  {lastActivityTime ? formatRelativeTime(lastActivityTime) : '-'}
                 </span>
               </div>
             </div>
@@ -226,7 +249,7 @@ export function ContextPanel() {
             <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-[#64748b]">模型</span>
-                <span className="text-white">{currentSession?.model || 'gpt-4o'}</span>
+                <span className="text-white">{configuredModel}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748b]">Token 消耗</span>

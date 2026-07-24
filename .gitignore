@@ -99,6 +99,12 @@ nginx_logs/
 backups/
 offline-package/
 
+## Deployment packages & generated files ##
+packager/
+dump.rdb
+celerybeat-schedule
+test_*.py
+
 ## Misc ##
 nul
 .workbuddy/

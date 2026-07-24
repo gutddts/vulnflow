@@ -1,4 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import axios from 'axios'
 import {
   ArrowLeft,
   Download,
@@ -113,11 +115,57 @@ export function ReportDetailPage() {
               <Share2 className="h-4 w-4 mr-1.5" />
               分享
             </Button>
-            <Button variant="outline" className="border-[#1e293b] bg-[#111827] text-[#e2e8f0]">
+            <Button
+              variant="outline"
+              className="border-[#1e293b] bg-[#111827] text-[#e2e8f0]"
+              onClick={() => {
+                // 真实下载：将报告导出为 Markdown 文件
+                const md = `# ${report?.title || '渗透测试报告'}\n\n${report?.content || ''}`
+                const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `${(report?.title || 'report').replace(/[^\w\u4e00-\u9fa5-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.md`
+                a.click()
+                URL.revokeObjectURL(url)
+                toast.success('已下载 Markdown 文件')
+              }}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              下载 .md
+            </Button>
+            <Button
+              variant="outline"
+              className="border-[#1e293b] bg-[#111827] text-[#e2e8f0]"
+              onClick={() => window.print()}
+            >
               <Printer className="h-4 w-4 mr-1.5" />
               打印
             </Button>
-            <Button className="bg-cyber-cyan hover:bg-cyber-cyan/90 text-black">
+            <Button
+              className="bg-cyber-cyan hover:bg-cyber-cyan/90 text-black"
+              onClick={async () => {
+                // 真实 PDF 导出：调后端 fpdf2 生成 PDF
+                toast.loading('正在生成 PDF...', { id: 'pdf-gen' })
+                try {
+                  const { data } = await axios.post(
+                    '/api/v1/reports/export-pdf',
+                    { title: report?.title || '渗透测试报告', content: report?.content || '', target: report?.target || '' },
+                    { responseType: 'blob', timeout: 30000 },
+                  )
+                  const blob = new Blob([data], { type: 'application/pdf' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${(report?.title || 'report').replace(/[^\w\u4e00-\u9fa5-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                  toast.success('PDF 已下载', { id: 'pdf-gen' })
+                } catch (e: any) {
+                  toast.error('PDF 生成失败：' + (e?.message || e), { id: 'pdf-gen' })
+                }
+              }}
+            >
               <Download className="h-4 w-4 mr-1.5" />
               下载 PDF
             </Button>

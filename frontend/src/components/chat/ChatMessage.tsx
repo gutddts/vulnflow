@@ -1,13 +1,14 @@
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
-import { Bot, User, Copy, Check, FileText, CheckCircle2 } from 'lucide-react'
-import { useState } from 'react'
+import { Bot, User, Copy, Check, FileText, CheckCircle2, ChevronDown, ChevronRight, Lightbulb, Play, Square, Terminal } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import { copyToClipboard } from '@/lib/utils'
 import { importReportFromMarkdown, parseVulnerabilitiesFromMarkdown } from '@/lib/importReport'
 import { useChatStore } from '@/stores/chatStore'
-import { toast } from 'sonner'
 import type { ChatMessage } from '@/types/chat'
 
 interface ChatMessageProps {
@@ -136,13 +137,87 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
                 components={{
                   code({ className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '')
+                    const language = match?.[1] || ''
                     const inline = !match
+                    const codeStr = String(children).replace(/\n$/, '')
+                    const [running, setRunning] = useState(false)
+                    const [output, setOutput] = useState('')
+
+                    const handleExecute = useCallback(async () => {
+                      setRunning(true)
+                      setOutput('启动执行沙箱...\n')
+                      const token = useAuthStore.getState().token
+                      const target = message.content.match(/(?:https?:\/\/)?([^\s\n]+)/)?.[0] || 'localhost'
+                      try {
+                        const res = await fetch('/api/v1/ai/exec', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                          body: JSON.stringify({
+                            target,
+                            commands: [codeStr],
+                            image: 'ubuntu:22.04',
+                            timeout: 120,
+                          }),
+                        })
+                        const reader = res.body?.getReader()
+                        if (!reader) throw new Error('No response body')
+                        const decoder = new TextDecoder()
+                        let buf = ''
+                        while (true) {
+                          const { done, value } = await reader.read()
+                          if (done) break
+                          buf += decoder.decode(value, { stream: true })
+                          const lines = buf.split('\n')
+                          buf = lines.pop() || ''
+                          for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue
+                            try {
+                              const d = JSON.parse(line.slice(6))
+                              if (d.type === 'output') setOutput((prev) => prev + d.content + '\n')
+                              if (d.type === 'status') setOutput((prev) => prev + d.content + '\n')
+                              if (d.type === 'complete') setOutput((prev) => prev + (d.content || ''))
+                              if (d.type === 'error') { setOutput((prev) => prev + '\n❌ ' + d.content + '\n'); toast.error(d.content) }
+                            } catch { /* ignore parse errors */ }
+                          }
+                        }
+                      } catch (e: any) {
+                        setOutput((prev) => prev + `\n❌ 执行失败: ${e.message}`)
+                      } finally {
+                        setRunning(false)
+                      }
+                    }, [codeStr])
+
                     return !inline ? (
-                      <pre className="bg-[#0d1321] rounded-lg p-3 overflow-x-auto border border-[#1e293b]">
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      </pre>
+                      <div className="relative group">
+                        <div className="flex items-center justify-between bg-[#0d1321] rounded-t-lg px-3 py-1.5 border border-[#1e293b] border-b-0">
+                          <span className="text-[10px] text-[#64748b]">{language || 'bash'}</span>
+                          {language === 'bash' || language === 'sh' || !language ? (
+                            <button
+                              onClick={handleExecute}
+                              disabled={running}
+                              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[#00d4aa]/10 text-[#00d4aa] hover:bg-[#00d4aa]/20 border border-[#00d4aa]/20 disabled:opacity-50 transition-all"
+                            >
+                              {running ? (
+                                <><Square className="h-2.5 w-2.5" /> 执行中...</>
+                              ) : (
+                                <><Play className="h-2.5 w-2.5" /> 执行</>
+                              )}
+                            </button>
+                          ) : null}
+                        </div>
+                        <pre className="bg-[#0d1321] rounded-b-lg p-3 overflow-x-auto border border-[#1e293b] border-t-0 m-0">
+                          <code className={className} {...props}>{children}</code>
+                        </pre>
+                        {output && (
+                          <div className="bg-[#0a0f1a] rounded-lg p-3 mt-1 border border-[#1e293b] max-h-48 overflow-y-auto">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Terminal className="h-3 w-3 text-[#00d4aa]" />
+                              <span className="text-[10px] text-[#64748b]">执行输出</span>
+                            </div>
+                            <pre className="text-[11px] text-[#e2e8f0] whitespace-pre-wrap font-mono">{output}</pre>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <code className="bg-[#0d1321] px-1.5 py-0.5 rounded text-[#00d4aa] text-sm" {...props}>
                         {children}
@@ -159,6 +234,11 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
             </div>
           )}
         </div>
+
+        {/* 推理/思考过程展示 */}
+        {!isUser && message.metadata?.reasoning && (
+          <ReasoningBlock reasoning={message.metadata.reasoning} />
+        )}
 
         {/* Actions */}
         {!isUser && message.content && (
@@ -215,6 +295,29 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** 可折叠的 AI 推理过程展示组件 */
+function ReasoningBlock({ reasoning }: { reasoning: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-1.5 ml-1 max-w-[80%]">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 text-[11px] text-[#8b5cf6] hover:text-[#a78bfa] transition-colors"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <Lightbulb className="h-3 w-3" />
+        <span>{open ? '隐藏思考过程' : '查看 AI 思考过程'}</span>
+        <span className="text-[#64748b]">({reasoning.length} 字符)</span>
+      </button>
+      {open && (
+        <div className="mt-1 rounded-lg border border-[#8b5cf6]/20 bg-[#1e1b4b]/50 px-3 py-2 text-[12px] text-[#c4b5fd] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+          {reasoning}
+        </div>
+      )}
     </div>
   )
 }

@@ -109,6 +109,7 @@ class EvaluatorAgent(BaseAgent):
                 next_action = llm_eval.get("next_action", next_action)
         except Exception as exc:
             self._log(f"LLM evaluation failed, using heuristic: {exc}", "warning")
+            state["status_messages"] = state.get("status_messages", []) + self._add_status(state, "[回退] AI 深度评估失败，使用启发式评分")
 
         status_messages = self._add_status(
             state,

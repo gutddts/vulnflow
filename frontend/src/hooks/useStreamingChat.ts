@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useChatStore } from '@/stores/chatStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { generateId } from '@/lib/utils'
 import type { ChatMessage } from '@/types/chat'
 
@@ -55,15 +56,21 @@ export function useStreamingChat() {
       abortControllerRef.current = controller
 
       try {
-        const response = await fetch('/api/v1/chat/stream', {
+        const settings = useSettingsStore.getState()
+        const response = await fetch(`/api/v1/chat/sessions/${sessionId}/stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            session_id: sessionId,
-            message: content,
+            role: 'user',
+            content: content,
+            model: settings.model,
+            provider: settings.provider,
+            api_key: settings.apiKeys[settings.provider] || '',
+            api_base_url: settings.apiBaseUrl,
+            api_format: settings.apiFormat,
           }),
           signal: controller.signal,
         })

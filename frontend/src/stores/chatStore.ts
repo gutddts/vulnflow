@@ -76,13 +76,20 @@ export const useChatStore = create<ChatState>()(
     }),
 
   addMessage: (message) => {
-    const { currentSessionId, sessionMessages } = get()
+    const { currentSessionId, sessionMessages, sessions } = get()
     if (!currentSessionId) return
     const currentList = sessionMessages[currentSessionId] || []
     const updated = [...currentList, message]
+    // 同时更新 session 的 updated_at + message_count
+    const updatedSessions = sessions.map((s) =>
+      s.id === currentSessionId
+        ? { ...s, updated_at: new Date().toISOString(), message_count: (s.message_count || 0) + 1 }
+        : s,
+    )
     set({
       sessionMessages: { ...sessionMessages, [currentSessionId]: updated },
       messages: updated,
+      sessions: updatedSessions,
     })
   },
 

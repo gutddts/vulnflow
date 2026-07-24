@@ -129,6 +129,7 @@ class ReporterAgent(BaseAgent):
         except Exception as exc:
             self._log(f"LLM summary generation failed: {exc}", "warning")
             report_data["executive_summary"] = self._default_summary(report_data)
+            state["status_messages"] = state.get("status_messages", []) + self._add_status(state, "[回退] AI 报告摘要生成失败，使用默认模板")
 
         # Generate risk summary
         report_data["risk_summary"] = self._generate_risk_summary(report_data)

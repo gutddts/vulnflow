@@ -16,6 +16,7 @@ import {
   Copy,
   ExternalLink,
   Sparkles,
+  BadgeCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,12 +34,14 @@ const SEVERITY_CONFIG: Record<SeverityLevel, { label: string; color: string; bg:
   info:     { label: '信息', color: 'text-gray-400',  bg: 'bg-gray-500/10',  border: 'border-gray-500/30',  text: 'text-gray-300',  bar: 'bg-gray-500' },
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   open:          { label: '待处理', icon: Clock,        color: 'text-yellow-400' },
+  verified:      { label: '已验证', icon: BadgeCheck,   color: 'text-cyan-400' },
   confirmed:     { label: '已确认', icon: CheckCircle2, color: 'text-red-400' },
   mitigated:     { label: '已修复', icon: Shield,       color: 'text-green-400' },
   false_positive:{ label: '误报',   icon: XCircle,      color: 'text-gray-400' },
-} as const
+}
+const DEFAULT_STATUS = { label: '未知', icon: Clock, color: 'text-gray-400' }
 
 type FilterSeverity = SeverityLevel | 'all'
 type FilterStatus = Finding['status'] | 'all'
@@ -218,7 +221,7 @@ export function FindingsPage() {
         <div className="space-y-2">
           {filtered.map((finding) => {
             const sevCfg = SEVERITY_CONFIG[finding.severity]
-            const stCfg = STATUS_CONFIG[finding.status]
+            const stCfg = STATUS_CONFIG[finding.status] || DEFAULT_STATUS
             const StatusIcon = stCfg.icon
             const isSelected = selectedIds.has(finding.id)
             return (
@@ -347,7 +350,7 @@ function FindingDetailDialog({
   onDelete: () => void
 }) {
   const sevCfg = SEVERITY_CONFIG[finding.severity]
-  const stCfg = STATUS_CONFIG[finding.status]
+  const stCfg = STATUS_CONFIG[finding.status] || DEFAULT_STATUS
   const StatusIcon = stCfg.icon
 
   return (

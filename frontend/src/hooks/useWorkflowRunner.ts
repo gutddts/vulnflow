@@ -130,8 +130,10 @@ export function useWorkflowRunner() {
       }
       addMessage(startMsg)
 
-      // 启动执行
-      executeStepByStep(run, plan, 0, addMessage, currentSessionId, timerIdsRef, targetInput)
+      // 启动执行（异步链式）
+      executeStepByStep(run, plan, 0, addMessage, currentSessionId, timerIdsRef, targetInput).catch((err) => {
+        console.error('[Workflow] 链式执行失败:', err)
+      })
 
       return run
     },
@@ -204,9 +206,9 @@ function executeStepByStep(
   sessionId: string,
   timerIdsRef: React.MutableRefObject<Set<number>>,
   target: string,
-) {
+): Promise<void> {
   // 已被用户停止，跳过
-  if (run.status !== 'running') return
+  if (run.status !== 'running') return Promise.resolve()
   if (groupIndex >= plan.length) {
     // 全部完成 - 自动创建报告到报告中心
     run.status = 'completed'
@@ -366,22 +368,23 @@ ${
   }
   addMessage(progressMsg)
 
-  // 真实执行当前 group 的节点（通过 workflowEngine）
-  ;(async () => {
+  // 真实执行当前 group 的节点（通过 workflowEngine）—— return 让 .catch() 可用
+  return (async () => {
     const upstreamOutputs: Record<string, string> = {}
     const results: NodeExecutionResult[] = []
 
     for (const node of group) {
-      // 已被终止则停止
       if (run.status !== 'running') return
       try {
+        console.log(`[Workflow] Executing node: ${node.label} (${node.type})`)
+        const startTime = Date.now()
         const result = await executeNode(node, target, upstreamOutputs)
+        console.log(`[Workflow] Node completed: ${node.label} in ${(Date.now() - startTime) / 1000}s, status: ${result.status}`)
         results.push(result)
         const p = run.progress.find((pp) => pp.nodeId === node.id)
         if (p) p.status = result.status
         upstreamOutputs[node.type] = result.output
 
-        // 发送每个节点的详细结果到聊天
         const resultMsg: ChatMessage = {
           id: generateId(),
           session_id: sessionId,
@@ -389,14 +392,9 @@ ${
           type: 'text',
           content: `${result.status === 'completed' ? '✅' : '❌'} **${node.label}** ${result.status === 'completed' ? '完成' : '失败'} (${(result.duration / 1000).toFixed(1)}s)\n\n${result.output}`,
           created_at: new Date().toISOString(),
-          metadata: {
-            model: 'workflow-engine',
-            node_execution: result,
-          },
+          metadata: { model: 'workflow-engine', node_execution: result },
         }
         addMessage(resultMsg)
-
-        // 触发滚动
         window.dispatchEvent(new Event('workflow-progress'))
       } catch (err) {
         const p = run.progress.find((pp) => pp.nodeId === node.id)
@@ -410,15 +408,26 @@ ${
           created_at: new Date().toISOString(),
         }
         addMessage(errMsg)
+        console.error(`[Workflow] Node ${node.label} failed:`, err)
       }
     }
 
-    // 等待 0.8s 进入下一阶段
-    const t2 = setTimeout(() => {
-      timerIdsRef.current.delete(t2)
-      if (run.status !== 'running') return
-      executeStepByStep(run, plan, groupIndex + 1, addMessage, sessionId, timerIdsRef, target)
-    }, 800)
-    timerIdsRef.current.add(t2)
+    if (run.status !== 'running') return
+    console.log(`[Workflow] Group ${groupIndex + 1} completed, advancing to ${groupIndex + 2}/${plan.length}`)
+
+    // 等待 0.5s 进入下一阶段（让用户看清楚当前阶段完成）
+    await new Promise((res) => {
+      const t = setTimeout(() => {
+        timerIdsRef.current.delete(t)
+        res(undefined)
+      }, 500)
+      timerIdsRef.current.add(t)
+    })
+
+    if (run.status !== 'running') return
+    // 递归调用下一阶段（async 链式，不依赖 setTimeout race condition）
+    await executeStepByStep(run, plan, groupIndex + 1, addMessage, sessionId, timerIdsRef, target)
   })()
 }
+
+/** 启动工作流执行（useCallback 返回，避免重复创建） */

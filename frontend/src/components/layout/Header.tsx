@@ -76,7 +76,7 @@ export function Header() {
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[#1a1f2e] transition-colors">
+            <span className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[#1a1f2e] transition-colors cursor-pointer" role="button" tabIndex={0}>
               <Avatar className="h-8 w-8 ring-2 ring-cyber-cyan/30">
                 <AvatarFallback className="bg-gradient-to-br from-cyber-cyan to-purple-500 text-black text-sm font-bold">
                   {user ? getInitials(user.username || user.email) : 'U'}
@@ -84,7 +84,7 @@ export function Header() {
               </Avatar>
               <span className="text-sm text-white">{user?.username || '用户'}</span>
               <ChevronDown className="h-4 w-4 text-[#94a3b8]" />
-            </button>
+            </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"

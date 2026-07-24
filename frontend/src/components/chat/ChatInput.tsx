@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Square, Globe, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 interface ChatInputProps {
   onSend: (content: string, target?: string) => void
@@ -23,6 +24,8 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
   const [targetUrl, setTargetUrl] = useState('')
   const [showTarget, setShowTarget] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // 实际配置的 AI 模型（用户设置中的）
+  const configuredModel = useSettingsStore((s) => s.model)
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -163,7 +166,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
           </span>
         </div>
         <span className="text-[#475569]">
-          VulnFlow AI 助手 - 模型: GPT-4o
+          VulnFlow AI 助手 - 模型: {configuredModel}
         </span>
       </div>
     </div>

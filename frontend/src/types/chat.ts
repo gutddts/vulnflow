@@ -19,6 +19,8 @@ export interface ChatMessageMetadata {
   attack_path?: AttackPathStep[]
   model?: string
   tokens?: TokenUsage
+  /** AI 推理/思考过程（如 DeepSeek reasoning_content） */
+  reasoning?: string
 }
 
 export interface ToolCall {

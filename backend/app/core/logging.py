@@ -23,7 +23,7 @@ def setup_logging() -> None:
         colorlog.ColoredFormatter(
             fmt=(
                 "%(log_color)s%(asctime)s.%(msecs)03d %(levelname)-8s "
-                "[%(name)s] %(request_id)s %(message)s%(reset)s"
+                "[%(name)s] %(message)s%(reset)s"
             ),
             datefmt="%Y-%m-%d %H:%M:%S",
             log_colors={
@@ -32,9 +32,6 @@ def setup_logging() -> None:
                 "WARNING": "yellow",
                 "ERROR": "red",
                 "CRITICAL": "red,bg_white",
-            },
-            secondary_log_colors={
-                "request_id": {"DEBUG": "purple"},
             },
         )
     )
